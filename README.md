@@ -102,7 +102,8 @@ Write `~/.config/herdr-vim/keys.json`. Its format is Herdr's `keys.json`, with m
 ```json
 {
   "normal": {
-    "h": "pane.go:left",
+    "h": "herdr-vim.go:left",
+    "l": { "command": "herdr-vim.go", "args": { "direction": "right", "edge": "tab.next", "nvim": "alt+l" } },
     "shift-h": "pane.swap:left",
     "/": "herdr-vim.insert:mod.open:herdr-fff",
     "space": "herdr-vim.once:leader",
@@ -124,6 +125,7 @@ As with Herdr's own `keys.json`, your file replaces the defaults entirely: start
 
 | Action | Does |
 | --- | --- |
+| `herdr-vim.go:<direction>` | focus the pane `left`, `right`, `up` or `down`, as Herdr's `pane.go`, one move at a time: keys typed while a move lands wait their turn instead of reaching the new pane's program. Arguments: `edge`, an action for when there is no pane that way (`"tab.next"`, as zellij's `move_focus_or_tab`), and `nvim`, a key sent to the pane instead when it runs nvim (`"alt+l"`, for a plugin such as smart-splits.nvim that moves among nvim's splits and hands the move back to Herdr at its edge) |
 | `herdr-vim.insert` | back to Insert mode |
 | `herdr-vim.insert:<action>` | back to Insert mode, then run the action: for anything that opens a dialog or another mod, which then gets the keyboard |
 | `herdr-vim.mode:<mode>` | switch to that mode |

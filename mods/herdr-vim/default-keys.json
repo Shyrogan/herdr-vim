@@ -1,9 +1,9 @@
 {
   "normal": {
-    "h": "pane.go:left",
-    "j": "pane.go:down",
-    "k": "pane.go:up",
-    "l": "pane.go:right",
+    "h": "herdr-vim.go:left",
+    "j": "herdr-vim.go:down",
+    "k": "herdr-vim.go:up",
+    "l": "herdr-vim.go:right",
     "shift-h": "pane.swap:left",
     "shift-j": "pane.swap:down",
     "shift-k": "pane.swap:up",

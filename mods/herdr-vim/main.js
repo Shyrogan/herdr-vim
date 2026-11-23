@@ -20,6 +20,11 @@
 // Actions, as in Herdr's keys.json: a command (`"pane.zoom"`), a command
 // whose value fills its first argument (`"pane.go:left"`), or
 // `{"command": ..., "args": {...}}`. herdr-vim's own commands:
+//   herdr-vim.go:<direction>     focus the pane that way, as pane.go, one
+//                                move at a time; args `edge`, an action
+//                                for when there is none (tab.next), and
+//                                `nvim`, a key for nvim instead when the
+//                                pane runs it (alt+h, for smart-splits)
 //   herdr-vim.insert             back to Insert mode
 //   herdr-vim.insert:<action>    back to Insert mode, then run the action
 //   herdr-vim.mode:<mode>        switch mode
@@ -28,7 +33,7 @@
 
 import { View, div } from "gpui-kit";
 import { Popup, h_flex, v_flex } from "gpui-base";
-import { appHome, commands, focused, hc, home, nextCommand, notify, readTextFile, run, setShared, theme } from "herdr";
+import { appHome, commands, focused, hc, home, nextCommand, notify, panes, readTextFile, run, setShared, theme } from "herdr";
 
 const START = "normal";
 const INSERT = "insert";
@@ -36,6 +41,9 @@ const DOUBLE_MS = 300;
 // After a command, the time its pane may hold the keyboard before herdr-vim
 // takes it back; a loss outside it is a click, which means Insert mode.
 const SETTLE_MS = 250;
+// pane.go gives no answer, and focused() names the new pane a few ms later:
+// focus that hasn't moved within this long means there was no pane that way.
+const GO_MS = 100;
 
 const userKeys = () => `${home()}/.config/herdr-vim/keys.json`;
 const defaultKeys = () => `${appHome()}/mods/herdr-vim/default-keys.json`;
@@ -62,9 +70,10 @@ function spellings(e) {
   return out;
 }
 
-// "name:value" → [name, value]; an object action → [command, null].
+// "name:value" → [name, value]; an object action → [command, its first
+// argument's value].
 function split(action) {
-  if (action && typeof action === "object") return [action.command, null];
+  if (action && typeof action === "object") return [action.command, Object.values(action.args ?? {})[0] ?? null];
   const at = action.indexOf(":");
   return at < 0 ? [action, null] : [action.slice(0, at), action.slice(at + 1)];
 }
@@ -79,7 +88,7 @@ function runAction(action) {
 }
 
 // The order of the keys list: by what the action acts on.
-const ORDER = ["pane.go", "pane.swap", "pane.split", "pane.zoom", "pane.close", "tab.", "space.", "agent.", "herdr-vim.once", "herdr-vim.mode", "herdr-vim.insert", "herdr-vim.help"];
+const ORDER = ["pane.go", "herdr-vim.go", "pane.swap", "pane.split", "pane.zoom", "pane.close", "tab.", "space.", "agent.", "herdr-vim.once", "herdr-vim.mode", "herdr-vim.insert", "herdr-vim.help"];
 const rank = (action) => {
   const [command, value] = split(action);
   if (command === "herdr-vim.insert" && value) return rank(value);
@@ -90,6 +99,7 @@ const rank = (action) => {
 // How the keys list names an action.
 const NAMES = {
   "pane.go": (v) => `Focus ${v}`,
+  "herdr-vim.go": (v) => `Focus ${v}`,
   "pane.swap": (v) => `Move pane ${v}`,
   "pane.split": (v) => `Split ${v}`,
   "pane.close": () => "Close pane",
@@ -113,6 +123,13 @@ const NAMES = {
   "herdr-vim.help": () => "Show keys",
 };
 const title = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+// The pane runs nvim: as its program, or as herdr-nvim's sidebar, whose own
+// client titles it "nvim · <file>".
+function runsNvim(id) {
+  const pane = id ? panes().find((p) => p.pane === id) : null;
+  return pane?.program?.key === "nvim" || /^nvim\b/.test(pane?.title ?? "");
+}
+
 function name(action) {
   const [command, value] = split(action);
   return NAMES[command]?.(value) ?? (typeof action === "string" ? action.replace(":", " ") : command);
@@ -136,6 +153,12 @@ export default class Vim extends View {
     this.once = null; // a mode for the next key only
     this.help = false;
     this.settleUntil = 0;
+    this.holding = false;
+    // A herdr-vim.go in flight, and the keys typed meanwhile, which wait
+    // their turn: a move read before the last one lands would start from the
+    // pane it left.
+    this.moving = 0; // since when, or 0
+    this.queued = [];
     this.lastEscape = { at: 0, terminal: null };
     this.handle = cx.focus_handle();
     this.watch = null;
@@ -204,6 +227,7 @@ export default class Vim extends View {
   leave(cx) {
     this.watch?.cancel();
     this.watch = null;
+    this.queued = [];
     this.mode = INSERT;
     this.once = null;
     this.help = false;
@@ -211,19 +235,73 @@ export default class Vim extends View {
     cx.notify();
   }
 
-  // A command can move the keyboard to a pane; take it back.
-  refocus(cx) {
-    this.settleUntil = Date.now() + SETTLE_MS;
-    for (const ms of [0, 30, 120]) {
-      cx.timer.after(ms, () => {
-        if (this.mode !== INSERT) this.handle.focus();
-      });
+  // A command can move the keyboard to a pane, a few ms after it runs; take
+  // it back the moment it goes, or the next key typed reaches the program.
+  refocus(cx, settle = SETTLE_MS) {
+    this.settleUntil = Math.max(this.settleUntil, Date.now() + settle);
+    if (this.holding) return;
+    this.holding = true;
+    const hold = (cx) => {
+      if (this.mode === INSERT || Date.now() >= this.settleUntil) {
+        this.holding = false;
+        return;
+      }
+      if (!this.handle.is_focused()) this.handle.focus();
+      cx.timer.after(1, hold);
+    };
+    hold(cx);
+  }
+
+  // Focus the pane that way; at the edge, `edge`; in nvim, `nvim` to it.
+  go({ direction, edge, nvim }, cx) {
+    const at = focused();
+    if (nvim && at?.terminal && runsNvim(at.pane)) {
+      // nvim's smart-splits moves among its splits, and past its edge runs
+      // a move of Herdr's, which may take the keyboard a moment.
+      this.refocus(cx, 600);
+      hc(["keys", at.terminal, nvim]);
+      return;
+    }
+    const from = { pane: at?.pane ?? null, tab: at?.tab ?? null };
+    this.moving = Date.now();
+    this.refocus(cx);
+    run("pane.go", { direction });
+    let start = Date.now();
+    let atEdge = false;
+    const check = (cx) => {
+      const now = focused();
+      const moved = (now?.pane ?? null) !== from.pane || (now?.tab ?? null) !== from.tab;
+      if (!moved && Date.now() - start < GO_MS) return cx.timer.after(5, check);
+      if (!moved && edge && !atEdge) {
+        atEdge = true;
+        start = Date.now();
+        this.refocus(cx);
+        this.attempt(edge);
+        return cx.timer.after(5, check);
+      }
+      this.moving = 0;
+      const queued = this.queued;
+      this.queued = [];
+      // A move among them queues the rest again.
+      for (const e of queued) this.press(e, cx);
+    };
+    cx.timer.after(0, check);
+  }
+
+  attempt(action) {
+    try {
+      runAction(action);
+    } catch (e) {
+      notify({ title: "herdr-vim", body: `${name(action)}: ${e.message ?? e}`, level: "error" });
     }
   }
 
   perform(action, cx) {
     const [command, value] = split(action);
     switch (command) {
+      case "herdr-vim.go":
+        this.go(typeof action === "object" ? { ...action.args } : { direction: value }, cx);
+        return;
       case "herdr-vim.insert":
         this.insert(cx);
         if (value) runAction(value);
@@ -241,16 +319,18 @@ export default class Vim extends View {
         return;
       default:
         this.refocus(cx);
-        try {
-          runAction(action);
-        } catch (e) {
-          notify({ title: "herdr-vim", body: `${name(action)}: ${e.message ?? e}`, level: "error" });
-        }
+        this.attempt(action);
     }
   }
 
   press(e, cx) {
     if (this.mode === INSERT) return;
+    // A second without an answer is no move to wait for.
+    if (this.moving && Date.now() - this.moving < 1000) {
+      const { keystroke, key_char, modifiers } = e;
+      this.queued.push({ keystroke, key_char, modifiers: { ...modifiers } });
+      return;
+    }
     const section = this.keys[this.once ?? this.mode] ?? {};
     const key = spellings(e).find((k) => k in section);
     const pending = this.once;
