@@ -34,20 +34,17 @@
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
           description = "The herdr-vim mod.";
         };
-        settings = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
+        keys = lib.mkOption {
+          type = lib.types.nullOr (lib.types.attrsOf (lib.types.attrsOf lib.types.anything));
+          default = null;
           example = lib.literalExpression ''
-            {
-              modes.normal.keys = {
-                "/" = { label = "Find file"; run = "vim.open:herdr-fff"; };
-                x = null;
-              };
-            }
+            let defaults = builtins.fromJSON (builtins.readFile "''${pkgs.herdr-vim}/share/herdr-vim/mods/herdr-vim/default-keys.json");
+            in defaults // { normal = defaults.normal // { "/" = "herdr-vim.insert:mod.open:herdr-fff"; }; }
           '';
           description = ''
-            Written to ~/.config/herdr-vim/config.json and merged over the
-            default keys. See the README for the format.
+            Written to ~/.config/herdr-vim/keys.json, in the format of Herdr's
+            keys.json with modes for sections. Like Herdr's keys.json, it
+            replaces the default keys entirely. Null keeps the defaults.
           '';
         };
       };
@@ -57,8 +54,9 @@
         xdg.configFile = {
           "herdr-app/mods/herdr-vim/main.js".source = "${mod}/main.js";
           "herdr-app/mods/herdr-vim/mod.json".source = "${mod}/mod.json";
-          "herdr-vim/config.json" = lib.mkIf (cfg.settings != {}) {
-            text = builtins.toJSON cfg.settings;
+          "herdr-app/mods/herdr-vim/default-keys.json".source = "${mod}/default-keys.json";
+          "herdr-vim/keys.json" = lib.mkIf (cfg.keys != null) {
+            text = builtins.toJSON cfg.keys;
           };
         };
       };
