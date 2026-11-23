@@ -40,8 +40,7 @@
     "shift-r": "herdr-vim.insert:space.rename",
     ":": "herdr-vim.insert:app.palette",
     "?": "herdr-vim.help",
-    "i": "herdr-vim.insert",
-    "escape": "herdr-vim.insert"
+    "i": "herdr-vim.insert"
   },
   "go": {
     "t": "tab.next",

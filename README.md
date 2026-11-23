@@ -2,11 +2,13 @@
 
 vim's modes for the [Herdr](https://herdr.dev) desktop app.
 
-Herdr as it is becomes Insert mode: every key goes to the focused terminal, your shell, nvim or agent. One key enters Normal mode, where keys drive Herdr instead: `hjkl` moves between panes, `v` and `s` split, `x` closes, `g t` goes to the next tab, and so on. You stay in Normal mode until `i` or `Escape` takes you back to Insert mode. You can add modes and rebind every key, in a `keys.json` written exactly like Herdr's.
+Herdr as it is becomes Insert mode: every key goes to the focused terminal, your shell, nvim or agent. `Escape Escape` enters Normal mode, as `tnoremap <Esc><Esc> <C-\><C-n>` leaves a terminal in nvim. There, keys drive Herdr instead: `hjkl` moves between panes, `v` and `s` split, `x` closes, `g t` goes to the next tab, and so on. You stay in Normal mode until `i` takes you back to Insert mode. You can add modes and rebind every key, in a `keys.json` written exactly like Herdr's.
 
 ## How it works
 
-herdr-vim is a single Herdr mod. Entering Normal mode opens it as a small badge at the top of the window that takes the keyboard. Each key runs a Herdr command or switches mode. Leaving to Insert mode closes the badge, and so does clicking elsewhere.
+herdr-vim is two Herdr mods. `herdr-vim` is Normal mode (and any other mode): entering it opens a small badge at the top of the window that takes the keyboard. Each key runs a Herdr command or switches mode. Leaving to Insert mode closes the badge, and so does clicking elsewhere.
+
+`herdr-vim-escape` handles `Escape` in a terminal. The first `Escape` goes on to the program at once, so nvim, agents and shells get it as before (in Claude Code, it still interrupts a running turn). A second `Escape` within 300 ms enters Normal mode instead of reaching the program. Keys typed after a single `Escape`, such as `:w` in nvim, never pass through herdr-vim.
 
 Herdr has no modes of its own, so the badge is what holds the keyboard while you're in a mode other than Insert.
 
@@ -15,21 +17,22 @@ Herdr has no modes of its own, so the badge is what holds the keyboard while you
 ### By hand
 
 ```sh
-mkdir -p ~/.config/herdr-app/mods/herdr-vim
+mkdir -p ~/.config/herdr-app/mods/herdr-vim ~/.config/herdr-app/mods/herdr-vim-escape
 cp mods/herdr-vim/{main.js,mod.json,default-keys.json} ~/.config/herdr-app/mods/herdr-vim/
+cp mods/herdr-vim-escape/* ~/.config/herdr-app/mods/herdr-vim-escape/
 ```
 
-Then add the key that enters Normal mode to `~/.config/herdr-app/keys.json`. [mods/herdr-vim/keys.json](mods/herdr-vim/keys.json) suggests `alt-space`:
+Then send a terminal's `Escape` to herdr-vim in `~/.config/herdr-app/keys.json`, as [mods/herdr-vim/keys.json](mods/herdr-vim/keys.json) does:
 
 ```json
 {
-  "global": {
-    "alt-space": "mod.open:herdr-vim"
+  "terminal": {
+    "escape": "mod.open:herdr-vim-escape"
   }
 }
 ```
 
-Pick a key terminal programs don't need. `escape` won't do: nvim and agents rely on it. On a French AZERTY keyboard, `²` (left of `1`) is a good choice.
+You can also bind a key of your own to `mod.open:herdr-vim`, which enters Normal mode directly.
 
 ### With Nix (home-manager)
 
@@ -46,7 +49,7 @@ Pick a key terminal programs don't need. `escape` won't do: nvim and agents rely
 }
 ```
 
-`programs.herdr-vim.keys` writes `~/.config/herdr-vim/keys.json` (see Configure). The key that enters Normal mode still goes in Herdr's `keys.json`.
+`programs.herdr-vim.keys` writes `~/.config/herdr-vim/keys.json` (see Configure). The `escape` binding still goes in Herdr's `keys.json`.
 
 ## Default keys
 
@@ -70,7 +73,8 @@ Pick a key terminal programs don't need. `escape` won't do: nvim and agents rely
 | `:` | command palette |
 | `m` | `move` mode: `hjkl` swaps panes until `escape` |
 | `?` | list the mode's keys |
-| `i`, `escape` | Insert mode |
+| `i` | Insert mode |
+| `escape` | cancel a pending key (after `g`) |
 
 `go` holds the keys after `g`, and `move` is the mode `m` enters.
 
@@ -109,7 +113,7 @@ As with Herdr's own `keys.json`, your file replaces the defaults entirely: start
 | `herdr-vim.once:<mode>` | take the next key from that mode, then come back: key sequences such as `g t` |
 | `herdr-vim.help` | show or hide the mode's keys |
 
-`escape` returns to Insert mode in any mode that doesn't bind it. A config error shows in the badge.
+As in nvim, an unbound key does nothing, so `escape` only cancels a pending key unless a mode binds it. A config error shows in the badge.
 
 ## License
 

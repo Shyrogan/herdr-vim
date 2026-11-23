@@ -10,11 +10,11 @@
     systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
     forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
   in {
-    # The mod's files, in share/herdr-vim/mods/herdr-vim/.
+    # The mods, in share/herdr-vim/mods/.
     packages = forAll (pkgs: {
       default = pkgs.runCommand "herdr-vim" {} ''
         mkdir -p $out/share/herdr-vim/mods
-        cp -r ${./mods/herdr-vim} $out/share/herdr-vim/mods/herdr-vim
+        cp -r ${./mods}/. $out/share/herdr-vim/mods/
       '';
     });
 
@@ -26,6 +26,7 @@
     }: let
       cfg = config.programs.herdr-vim;
       mod = "${cfg.package}/share/herdr-vim/mods/herdr-vim";
+      escape = "${cfg.package}/share/herdr-vim/mods/herdr-vim-escape";
     in {
       options.programs.herdr-vim = {
         enable = lib.mkEnableOption "herdr-vim, vim's modes for the Herdr desktop app";
@@ -55,6 +56,8 @@
           "herdr-app/mods/herdr-vim/main.js".source = "${mod}/main.js";
           "herdr-app/mods/herdr-vim/mod.json".source = "${mod}/mod.json";
           "herdr-app/mods/herdr-vim/default-keys.json".source = "${mod}/default-keys.json";
+          "herdr-app/mods/herdr-vim-escape/main.js".source = "${escape}/main.js";
+          "herdr-app/mods/herdr-vim-escape/mod.json".source = "${escape}/mod.json";
           "herdr-vim/keys.json" = lib.mkIf (cfg.keys != null) {
             text = builtins.toJSON cfg.keys;
           };
@@ -62,6 +65,9 @@
       };
     };
 
-    formatter = forAll (pkgs: pkgs.alejandra);
+    # alejandra alone reads stdin when `nix fmt` passes no paths.
+    formatter =
+      forAll (pkgs:
+        pkgs.writeShellScriptBin "fmt" ''exec ${pkgs.lib.getExe pkgs.alejandra} "''${@:-.}"'');
   };
 }

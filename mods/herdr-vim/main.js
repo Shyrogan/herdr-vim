@@ -3,7 +3,7 @@
 // Herdr itself is Insert mode: keys go to the focused terminal. Opening this
 // mod (`mod.open:herdr-vim`, bound to a key in Herdr's keys.json) enters
 // Normal mode: a small badge takes the keyboard, and keys drive Herdr
-// instead, until a key returns to Insert mode or you click elsewhere.
+// instead, until `i` returns to Insert mode or you click elsewhere.
 //
 // The keys of every mode are in a keys.json written exactly like Herdr's:
 // sections of key → action, with modes for sections. The user's
@@ -121,13 +121,11 @@ export default class Vim extends View {
   press(e, cx) {
     const section = this.keys[this.once ?? this.mode] ?? {};
     const key = spellings(e).find((k) => k in section);
-    const wasOnce = this.once;
     this.once = null;
     this.error = null;
-    if (key === undefined) {
-      // Escape leaves a mode that doesn't bind it.
-      if (!wasOnce && e.keystroke === "escape") return this.insert();
-    } else if (!this.perform(section[key], cx)) {
+    // An unbound key does nothing: as in nvim, Escape only cancels a pending
+    // key (herdr-vim.once), which reading it already did.
+    if (key !== undefined && !this.perform(section[key], cx)) {
       return;
     }
     cx.notify();

@@ -1,5 +1,5 @@
 {
-  "global": {
-    "alt-space": "mod.open:herdr-vim"
+  "terminal": {
+    "escape": "mod.open:herdr-vim-escape"
   }
 }
