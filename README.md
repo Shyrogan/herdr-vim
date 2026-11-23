@@ -133,7 +133,7 @@ As with Herdr's own `keys.json`, your file replaces the defaults entirely: start
 | `herdr-vim.once:<mode>` | take the next key from that mode, then come back: key sequences such as `g t` |
 | `herdr-vim.help` | show or hide the mode's keys |
 
-As in nvim, an unbound key does nothing, and `escape` only cancels what is pending unless a mode binds it: a key after `g`, the keys list, then a mode other than `normal`. A config error shows as a notification.
+As in nvim, an unbound key does nothing. `escape` closes the keys list first; then, unless the mode binds it (`"escape": "herdr-vim.insert"` returns to Insert mode), it cancels what is pending: a key after `g`, then a mode other than `normal`. A config error shows as a notification.
 
 ## License
 

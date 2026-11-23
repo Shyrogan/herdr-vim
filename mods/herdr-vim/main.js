@@ -431,13 +431,12 @@ export default class Vim extends View {
     const key = spellings(e).find((k) => k in section);
     const pending = this.once;
     this.once = null;
-    if (key !== undefined) this.perform(section[key], cx);
-    // Escape cancels what is pending: a one-key mode, the keys list, then a
-    // mode back to Normal. Bound, it does what it is bound to instead.
-    else if (e.keystroke === "escape" && !pending) {
-      if (this.help) this.help = false;
-      else this.mode = START;
-    }
+    // Escape closes the keys list first, bound or not.
+    if (e.keystroke === "escape" && this.help && !pending) this.help = false;
+    else if (key !== undefined) this.perform(section[key], cx);
+    // Unbound, Escape cancels what is pending: a one-key mode, then a mode
+    // back to Normal.
+    else if (e.keystroke === "escape" && !pending) this.mode = START;
     this.publish();
     cx.notify();
   }
