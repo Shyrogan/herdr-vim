@@ -48,6 +48,28 @@ const GO_MS = 100;
 const userKeys = () => `${home()}/.config/herdr-vim/keys.json`;
 const defaultKeys = () => `${appHome()}/mods/herdr-vim/default-keys.json`;
 
+// The titles of the mods the keys open, from their mod.json ("Find file"),
+// for the keys list.
+const titles = new Map();
+async function loadTitles(keys) {
+  const opened = new Set();
+  const visit = (action) => {
+    const [command, value] = split(action);
+    if (command === "herdr-vim.insert" && value) visit(value);
+    else if (command === "mod.open" && value) opened.add(value);
+  };
+  for (const section of Object.values(keys)) for (const action of Object.values(section ?? {})) visit(action);
+  for (const mod of opened) {
+    if (titles.has(mod)) continue;
+    try {
+      const title = JSON.parse((await readTextFile(`${appHome()}/mods/${mod}/mod.json`)) ?? "{}").title;
+      if (typeof title === "string") titles.set(mod, title);
+    } catch {
+      // No title: the keys list says "Open <mod>".
+    }
+  }
+}
+
 async function loadKeys() {
   for (const path of [userKeys(), defaultKeys()]) {
     const text = await readTextFile(path);
@@ -116,7 +138,7 @@ const NAMES = {
   "agent.next": () => "Next agent",
   "agent.prev": () => "Previous agent",
   "app.palette": () => "Commands",
-  "mod.open": (v) => `Open ${v}`,
+  "mod.open": (v) => titles.get(v) ?? `Open ${v}`,
   "herdr-vim.insert": (v) => (v ? name(v) : "Insert mode"),
   "herdr-vim.mode": (v) => `${title(v)} mode`,
   "herdr-vim.once": (v) => `${title(v)} …`,
@@ -207,6 +229,7 @@ export default class Vim extends View {
     cx.spawn(async (cx) => {
       const { keys, error } = await loadKeys();
       this.keys = keys;
+      await loadTitles(keys);
       if (error) notify({ title: "herdr-vim", body: error, level: "error" });
       else if (!keys[START]) notify({ title: "herdr-vim", body: `keys.json has no "${START}" mode`, level: "error" });
       cx.notify();
