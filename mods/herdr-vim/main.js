@@ -288,12 +288,19 @@ export default class Vim extends View {
     cx.notify();
   }
 
-  // Back to Insert mode, the keyboard to the focused terminal.
+  // Back to Insert mode, the keyboard to the focused terminal, or to the
+  // focused mod pane (a chat): pane.focus marks a mod pane focused without
+  // giving it the keyboard, which a focusable mod takes on its "focus"
+  // command, as pane.go sends it. <mod>.focus reaches every shown copy of
+  // that mod, so two side by side both answer it.
   insert(cx) {
     this.leave(cx);
     const f = focused();
-    if (f?.terminal) run("pane.focus", { terminal: f.terminal });
-    else if (f?.pane) run("pane.focus", { pane: f.pane });
+    if (f?.terminal) return run("pane.focus", { terminal: f.terminal });
+    if (!f?.pane) return;
+    run("pane.focus", { pane: f.pane });
+    const mod = panes().find((p) => p.pane === f.pane)?.mod;
+    if (mod) this.attempt(`${mod}.focus`);
   }
 
   // Insert mode without moving the keyboard (it already went elsewhere).
