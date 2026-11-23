@@ -8,19 +8,22 @@
 // after a single Escape never pass through here.
 
 import { View, div } from "gpui-kit";
-import { focused, hc, props, closeOverlay, run } from "herdr";
+import { focused, hc, props, closeOverlay, run, shared, setShared } from "herdr";
 
 const DOUBLE_MS = 300;
 
-// When the last Escape went on to a program, and to which terminal.
-let last = { at: 0, terminal: null };
+// When the last Escape went on to a program, and to which terminal. In
+// Herdr's shared state: each Escape opens a fresh copy of this mod, which
+// keeps nothing of the last one.
+const KEY = "herdr-vim.escape";
 
 export default class Escape extends View {
   init(_props, cx) {
     const terminal = focused()?.terminal ?? null;
     const now = Date.now();
+    const last = shared(KEY) ?? { at: 0, terminal: null };
     const double = terminal === last.terminal && now - last.at < DOUBLE_MS;
-    last = double ? { at: 0, terminal: null } : { at: now, terminal };
+    setShared(KEY, double ? { at: 0, terminal: null } : { at: now, terminal });
     // Close first: the next overlay, or the program, takes the keyboard.
     cx.timer.after(0, () => {
       const overlay = props()?.overlay;
