@@ -120,7 +120,7 @@ Write `~/.config/herdr-vim/keys.json`. Its format is Herdr's `keys.json`, with m
 As with Herdr's own `keys.json`, your file replaces the defaults entirely: start from a copy of [default-keys.json](mods/herdr-vim/default-keys.json). It is read each time you enter Normal mode.
 
 - **Modes** are the top-level sections. `herdr-vim.normal` and `Escape Escape` enter `normal`.
-- **Keys** are spelled as in Herdr's `keys.json`: `h`, `shift-h`, `ctrl-d`, `escape`, `space`, `tab`. A shifted symbol can also be written as the character it types: `?`, `:`, `&`.
+- **Keys** are spelled as in Herdr's `keys.json`: `h`, `shift-h`, `ctrl-d`, `escape`, `space`, `tab`. A symbol can also be written as the character it types: `?`, `:`, `&`, `²`.
 - **Actions** are Herdr's: a command (`"pane.zoom"`), a command whose value fills its first argument (`"pane.go:left"`), or `{ "command": "...", "args": { ... } }`. `herdr-app commands` lists every command. herdr-vim adds its own, written as a mod's commands are in Herdr:
 
 | Action | Does |
@@ -128,6 +128,7 @@ As with Herdr's own `keys.json`, your file replaces the defaults entirely: start
 | `herdr-vim.go:<direction>` | focus the pane `left`, `right`, `up` or `down`, as Herdr's `pane.go`, one move at a time: keys typed while a move lands wait their turn instead of reaching the new pane's program. Arguments: `edge`, an action for when there is no pane that way (`"tab.next"`, as zellij's `move_focus_or_tab`), and `nvim`, a key sent to the pane instead when it runs nvim (`"alt+l"`, for a plugin such as smart-splits.nvim that moves among nvim's splits and hands the move back to Herdr at its edge) |
 | `herdr-vim.insert` | back to Insert mode |
 | `herdr-vim.insert:<action>` | back to Insert mode, then run the action: for anything that opens a dialog or another mod, which then gets the keyboard |
+| `herdr-vim.type:<text>` | back to Insert mode, then type the text into the terminal: with `²` bound to `herdr-vim.normal`, `"²": "herdr-vim.type:²"` in `normal` makes `² ²` type `²`. Keys typed while it goes in follow it |
 | `herdr-vim.mode:<mode>` | switch to that mode |
 | `herdr-vim.once:<mode>` | take the next key from that mode, then come back: key sequences such as `g t` |
 | `herdr-vim.help` | show or hide the mode's keys |

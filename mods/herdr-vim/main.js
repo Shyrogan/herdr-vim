@@ -27,13 +27,16 @@
 //                                pane runs it (alt+h, for smart-splits)
 //   herdr-vim.insert             back to Insert mode
 //   herdr-vim.insert:<action>    back to Insert mode, then run the action
+//   herdr-vim.type:<text>        back to Insert mode, then type the text in
+//                                the terminal (² in Normal mode types ²,
+//                                when ² is what enters it)
 //   herdr-vim.mode:<mode>        switch mode
 //   herdr-vim.once:<mode>        the next key from that mode, then back
 //   herdr-vim.help               show or hide the mode's keys
 
 import { View, div } from "gpui-kit";
 import { Popup, h_flex, v_flex } from "gpui-base";
-import { appHome, commands, focused, hc, home, nextCommand, notify, panes, readTextFile, run, setShared, theme } from "herdr";
+import { appHome, commands, exec, focused, hc, home, nextCommand, notify, panes, readTextFile, run, setShared, theme } from "herdr";
 
 const START = "normal";
 const INSERT = "insert";
@@ -70,6 +73,50 @@ async function loadTitles(keys) {
   }
 }
 
+// Types text into a terminal as its own keys, without Enter: hc keys only
+// knows named keys, so this attaches to it through herdr-core's framed API
+// (hc connect) at its own size, sends the text as input and detaches, as
+// herdr-gitview's hcpaste.rs does. A frame: channel (u32), kind (DATA 0,
+// CLOSE 2), length (u32), all little-endian, then the payload; the attach
+// is the connection's first channel.
+const TYPE_SH = `
+le32() { for s in 0 8 16 24; do printf "\\\\$(printf %03o $(( ($1 >> s) & 255 )))"; done; }
+frame() { le32 "$1"; printf "\\\\$(printf %03o "$2")"; le32 "$(printf %s "$3" | wc -c)"; printf %s "$3"; }
+{
+  printf %s\\\\n "{\\"jsonrpc\\":\\"2.0\\",\\"id\\":0,\\"method\\":\\"hello\\",\\"params\\":{\\"framed\\":true}}"
+  frame 0 0 "{\\"jsonrpc\\":\\"2.0\\",\\"id\\":1,\\"method\\":\\"terminal.attach\\",\\"params\\":{\\"terminal\\":\\"$1\\",\\"cols\\":$2,\\"rows\\":$3,\\"history\\":0}}"
+  sleep 0.03
+  frame 1 0 "$4"
+  frame 1 2 ""
+  sleep 0.1
+} | hc connect >/dev/null 2>&1
+`;
+async function typeInto(terminal, text) {
+  const facts = JSON.parse((await hc(["get", terminal, "--json"])).stdout);
+  const result = await exec("sh", ["-c", TYPE_SH, "herdr-vim-type", terminal, String(facts.cols ?? 80), String(facts.rows ?? 24), text]);
+  if (result.code !== 0) throw new Error(result.stderr || `hc connect exited ${result.code}`);
+}
+
+// Keys herdr-vim held while it typed, typed after it in the same order:
+// characters as text, other keys by name (hc keys).
+async function forward(terminal, events) {
+  let text = "";
+  const flush = async () => {
+    if (text) await typeInto(terminal, text);
+    text = "";
+  };
+  for (const e of events) {
+    const m = e.modifiers ?? {};
+    if (!m.control && !m.alt && !m.platform && e.key_char && /^[^\p{C}]+$/u.test(e.key_char)) {
+      text += e.key_char;
+      continue;
+    }
+    await flush();
+    await hc(["keys", terminal, e.keystroke === "escape" ? "esc" : e.keystroke.replaceAll("-", "+")]);
+  }
+  await flush();
+}
+
 async function loadKeys() {
   for (const path of [userKeys(), defaultKeys()]) {
     const text = await readTextFile(path);
@@ -84,11 +131,13 @@ async function loadKeys() {
 }
 
 // The spellings a key may have in keys.json: Herdr's ("shift-h", "escape",
-// "ctrl-d"), and for a shifted symbol the character it types ("?", "&").
+// "ctrl-d"), and for a symbol the character it types: "?" and "&" for their
+// shifted keys, "²" for the key gpui names twosuperior.
 function spellings(e) {
   const out = [e.keystroke];
   const m = e.modifiers ?? {};
-  if (m.shift && !m.control && !m.alt && !m.platform && e.key_char && /^\P{L}$/u.test(e.key_char)) out.push(e.key_char);
+  const typed = e.key_char;
+  if (!m.control && !m.alt && !m.platform && typed && typed !== e.keystroke && /^\P{L}$/u.test(typed)) out.push(typed);
   return out;
 }
 
@@ -140,6 +189,7 @@ const NAMES = {
   "app.palette": () => "Commands",
   "mod.open": (v) => titles.get(v) ?? `Open ${v}`,
   "herdr-vim.insert": (v) => (v ? name(v) : "Insert mode"),
+  "herdr-vim.type": (v) => `Type ${v}`,
   "herdr-vim.mode": (v) => `${title(v)} mode`,
   "herdr-vim.once": (v) => `${title(v)} …`,
   "herdr-vim.help": () => "Show keys",
@@ -329,6 +379,29 @@ export default class Vim extends View {
         this.insert(cx);
         if (value) runAction(value);
         return;
+      case "herdr-vim.type": {
+        const terminal = focused()?.terminal;
+        if (!terminal || !value) return this.insert(cx);
+        // herdr-vim keeps the keyboard until the text is in, and the keys
+        // typed meanwhile follow it: ² ² b reads ²b, not b².
+        this.moving = Date.now();
+        this.queued = [];
+        cx.spawn(async (cx) => {
+          try {
+            await typeInto(terminal, value);
+            while (this.queued.length) {
+              const queued = this.queued;
+              this.queued = [];
+              await forward(terminal, queued);
+            }
+          } catch (e) {
+            notify({ title: "herdr-vim", body: `type ${value}: ${e.message ?? e}`, level: "error" });
+          }
+          this.moving = 0;
+          this.insert(cx);
+        });
+        return;
+      }
       case "herdr-vim.mode":
       case "herdr-vim.once": {
         const mode = value ?? action?.args?.mode;
