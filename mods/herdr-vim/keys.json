@@ -1,5 +1,5 @@
 {
   "terminal": {
-    "escape": "mod.open:herdr-vim-escape"
+    "escape": "herdr-vim-escape.escape"
   }
 }

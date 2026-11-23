@@ -8,7 +8,7 @@ Herdr as it is becomes Insert mode: every key goes to the focused terminal, your
 
 herdr-vim is two Herdr mods. `herdr-vim` is Normal mode (and any other mode): entering it opens a small badge at the top of the window that takes the keyboard. Each key runs a Herdr command or switches mode. Leaving to Insert mode closes the badge, and so does clicking elsewhere.
 
-`herdr-vim-escape` handles `Escape` in a terminal. The first `Escape` goes on to the program at once, so nvim, agents and shells get it as before (in Claude Code, it still interrupts a running turn). A second `Escape` within 300 ms enters Normal mode instead of reaching the program. Keys typed after a single `Escape`, such as `:w` in nvim, never pass through herdr-vim.
+`herdr-vim-escape` handles `Escape` in a terminal. It's a controller that draws nothing: one copy lives in your layout, and Herdr sends it each `Escape` as a command, so no popup takes the keyboard. The first `Escape` goes on to the program at once, so nvim, agents and shells get it as before (in Claude Code, it still interrupts a running turn). A second `Escape` within 300 ms enters Normal mode instead of reaching the program. Keys typed after a single `Escape`, such as `:w` in nvim, never pass through herdr-vim.
 
 Herdr has no modes of its own, so the badge is what holds the keyboard while you're in a mode other than Insert.
 
@@ -22,12 +22,18 @@ cp mods/herdr-vim/{main.js,mod.json,default-keys.json} ~/.config/herdr-app/mods/
 cp mods/herdr-vim-escape/* ~/.config/herdr-app/mods/herdr-vim-escape/
 ```
 
-Then send a terminal's `Escape` to herdr-vim in `~/.config/herdr-app/keys.json`, as [mods/herdr-vim/keys.json](mods/herdr-vim/keys.json) does:
+Put the controller in your layout: add this block to the `floating` list of the layout you use, in `~/.config/herdr-app/layouts/` (Herdr's own layouts can't be edited: clone one first with `layout.clone`):
+
+```json
+{ "id": "herdr-vim", "content": { "mod": "herdr-vim-escape" }, "edge": "bottom", "align": "end" }
+```
+
+Then send a terminal's `Escape` to it in `~/.config/herdr-app/keys.json`, as [mods/herdr-vim/keys.json](mods/herdr-vim/keys.json) does:
 
 ```json
 {
   "terminal": {
-    "escape": "mod.open:herdr-vim-escape"
+    "escape": "herdr-vim-escape.escape"
   }
 }
 ```
@@ -49,7 +55,7 @@ You can also bind a key of your own to `mod.open:herdr-vim`, which enters Normal
 }
 ```
 
-`programs.herdr-vim.keys` writes `~/.config/herdr-vim/keys.json` (see Configure). The `escape` binding still goes in Herdr's `keys.json`.
+`programs.herdr-vim.keys` writes `~/.config/herdr-vim/keys.json` (see Configure). The floating block and the `escape` binding still go in your layout and Herdr's `keys.json`.
 
 ## Default keys
 
