@@ -26,7 +26,6 @@
     }: let
       cfg = config.programs.herdr-vim;
       mod = "${cfg.package}/share/herdr-vim/mods/herdr-vim";
-      escape = "${cfg.package}/share/herdr-vim/mods/herdr-vim-escape";
     in {
       options.programs.herdr-vim = {
         enable = lib.mkEnableOption "herdr-vim, vim's modes for the Herdr desktop app";
@@ -56,8 +55,6 @@
           "herdr-app/mods/herdr-vim/main.js".source = "${mod}/main.js";
           "herdr-app/mods/herdr-vim/mod.json".source = "${mod}/mod.json";
           "herdr-app/mods/herdr-vim/default-keys.json".source = "${mod}/default-keys.json";
-          "herdr-app/mods/herdr-vim-escape/main.js".source = "${escape}/main.js";
-          "herdr-app/mods/herdr-vim-escape/mod.json".source = "${escape}/mod.json";
           "herdr-vim/keys.json" = lib.mkIf (cfg.keys != null) {
             text = builtins.toJSON cfg.keys;
           };

@@ -6,39 +6,50 @@ Herdr as it is becomes Insert mode: every key goes to the focused terminal, your
 
 ## How it works
 
-herdr-vim is two Herdr mods. `herdr-vim` is Normal mode (and any other mode): entering it opens a small badge at the top of the window that takes the keyboard. Each key runs a Herdr command or switches mode. Leaving to Insert mode closes the badge, and so does clicking elsewhere.
+herdr-vim is one Herdr mod, a block at the left end of the status bar, where nvim's statusline shows the mode: `● Insert`, or `● Normal` in the accent color. In Normal mode it holds the keyboard, and each key runs a Herdr command or switches mode. `i` gives the keyboard back to the pane, and so does clicking a terminal. A key that waits for another, such as `g`, lists the keys that can follow above the status bar, as which-key does; `?` lists the whole mode.
 
-`herdr-vim-escape` handles `Escape` in a terminal. It's a controller that draws nothing: one copy lives in your layout, and Herdr sends it each `Escape` as a command, so no popup takes the keyboard. The first `Escape` goes on to the program at once, so nvim, agents and shells get it as before (in Claude Code, it still interrupts a running turn). A second `Escape` within 300 ms enters Normal mode instead of reaching the program. Keys typed after a single `Escape`, such as `:w` in nvim, never pass through herdr-vim.
+Herdr sends it two commands from its own `keys.json`:
 
-Herdr has no modes of its own, so the badge is what holds the keyboard while you're in a mode other than Insert.
+- `herdr-vim.escape`, bound to `Escape` in the `terminal` section. The first `Escape` goes on to the program at once, so nvim, agents and shells get it as before (in Claude Code, it still interrupts a running turn). A second `Escape` within 300 ms enters Normal mode instead of reaching the program. Keys typed after a single `Escape`, such as `:w` in nvim, never pass through herdr-vim.
+- `herdr-vim.normal`, which enters Normal mode from anywhere: bind it to a key of your own.
+
+While herdr-vim holds the keyboard, Herdr draws no focus ring around the current pane. herdr-vim publishes the mode as the shared value `herdr-vim.mode` (`"insert"`, or the mode's name) so a pane header can mark the current pane instead, for example with an accent border when `shared("herdr-vim.mode") !== "insert"` and the pane is `focused`.
 
 ## Install
 
 ### By hand
 
 ```sh
-mkdir -p ~/.config/herdr-app/mods/herdr-vim ~/.config/herdr-app/mods/herdr-vim-escape
+mkdir -p ~/.config/herdr-app/mods/herdr-vim
 cp mods/herdr-vim/{main.js,mod.json,default-keys.json} ~/.config/herdr-app/mods/herdr-vim/
-cp mods/herdr-vim-escape/* ~/.config/herdr-app/mods/herdr-vim-escape/
 ```
 
-Put the controller in your layout: add this block to the `floating` list of the layout you use, in `~/.config/herdr-app/layouts/` (Herdr's own layouts can't be edited: clone one first with `layout.clone`):
-
-```json
-{ "id": "herdr-vim", "content": { "mod": "herdr-vim-escape" }, "edge": "bottom", "align": "end" }
-```
-
-Then send a terminal's `Escape` to it in `~/.config/herdr-app/keys.json`, as [mods/herdr-vim/keys.json](mods/herdr-vim/keys.json) does:
+Put it in the status bar of the layout you use, in `~/.config/herdr-app/layouts/` (Herdr's own layouts can't be edited: clone one first with `layout.clone`). In Herdr's main layout the status bar is the block with `"id": "status"`; replace it with a row holding herdr-vim and that block:
 
 ```json
 {
-  "terminal": {
-    "escape": "herdr-vim-escape.escape"
-  }
+  "type": "row",
+  "id": "status-row",
+  "size": { "px": 28 },
+  "children": [
+    { "type": "block", "id": "herdr-vim", "size": { "px": 96 }, "content": { "mod": "herdr-vim" } },
+    { "type": "block", "id": "status", "content": { "mod": "workspace-status" } }
+  ]
 }
 ```
 
-You can also bind a key of your own to `mod.open:herdr-vim`, which enters Normal mode directly.
+Then bind its commands in `~/.config/herdr-app/keys.json`, as [mods/herdr-vim/keys.json](mods/herdr-vim/keys.json) does:
+
+```json
+{
+  "global": {
+    "alt-space": "herdr-vim.normal"
+  },
+  "terminal": {
+    "escape": "herdr-vim.escape"
+  }
+}
+```
 
 ### With Nix (home-manager)
 
@@ -55,7 +66,7 @@ You can also bind a key of your own to `mod.open:herdr-vim`, which enters Normal
 }
 ```
 
-`programs.herdr-vim.keys` writes `~/.config/herdr-vim/keys.json` (see Configure). The floating block and the `escape` binding still go in your layout and Herdr's `keys.json`.
+`programs.herdr-vim.keys` writes `~/.config/herdr-vim/keys.json` (see Configure). The status bar block and the bindings still go in your layout and Herdr's `keys.json`.
 
 ## Default keys
 
@@ -80,7 +91,7 @@ You can also bind a key of your own to `mod.open:herdr-vim`, which enters Normal
 | `m` | `move` mode: `hjkl` swaps panes until `escape` |
 | `?` | list the mode's keys |
 | `i` | Insert mode |
-| `escape` | cancel a pending key (after `g`) |
+| `escape` | cancel a pending key (after `g`), close the keys list |
 
 `go` holds the keys after `g`, and `move` is the mode `m` enters.
 
@@ -107,7 +118,7 @@ Write `~/.config/herdr-vim/keys.json`. Its format is Herdr's `keys.json`, with m
 
 As with Herdr's own `keys.json`, your file replaces the defaults entirely: start from a copy of [default-keys.json](mods/herdr-vim/default-keys.json). It is read each time you enter Normal mode.
 
-- **Modes** are the top-level sections. `mod.open:herdr-vim` enters `normal`.
+- **Modes** are the top-level sections. `herdr-vim.normal` and `Escape Escape` enter `normal`.
 - **Keys** are spelled as in Herdr's `keys.json`: `h`, `shift-h`, `ctrl-d`, `escape`, `space`, `tab`. A shifted symbol can also be written as the character it types: `?`, `:`, `&`.
 - **Actions** are Herdr's: a command (`"pane.zoom"`), a command whose value fills its first argument (`"pane.go:left"`), or `{ "command": "...", "args": { ... } }`. `herdr-app commands` lists every command. herdr-vim adds its own, written as a mod's commands are in Herdr:
 
@@ -119,7 +130,7 @@ As with Herdr's own `keys.json`, your file replaces the defaults entirely: start
 | `herdr-vim.once:<mode>` | take the next key from that mode, then come back: key sequences such as `g t` |
 | `herdr-vim.help` | show or hide the mode's keys |
 
-As in nvim, an unbound key does nothing, so `escape` only cancels a pending key unless a mode binds it. A config error shows in the badge.
+As in nvim, an unbound key does nothing, and `escape` only cancels what is pending unless a mode binds it: a key after `g`, the keys list, then a mode other than `normal`. A config error shows as a notification.
 
 ## License
 
