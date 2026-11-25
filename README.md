@@ -8,10 +8,11 @@ Herdr as it is becomes Insert mode: every key goes to the focused terminal, your
 
 herdr-vim is one Herdr mod, a block at the left end of the status bar, where nvim's statusline shows the mode: `● Insert`, or `● Normal` in the accent color. In Normal mode it holds the keyboard, and each key runs a Herdr command or switches mode. `i` gives the keyboard back to the pane, and so does clicking a terminal. A key that waits for another, such as `g`, lists the keys that can follow above the status bar, as which-key does; `?` lists the whole mode.
 
-Herdr sends it two commands from its own `keys.json`:
+Herdr sends it these commands from its own `keys.json`:
 
 - `herdr-vim.escape`, bound to `Escape` in the `terminal` section. The first `Escape` goes on to the program at once, so nvim, agents and shells get it as before (in Claude Code, it still interrupts a running turn). A second `Escape` within 300 ms enters Normal mode instead of reaching the program. Keys typed after a single `Escape`, such as `:w` in nvim, never pass through herdr-vim.
 - `herdr-vim.normal`, which enters Normal mode from anywhere: bind it to a key of your own.
+- `herdr-vim.space<n>` (`herdr-vim.space1`, `herdr-vim.space2` …), which selects the nth space when it exists and does nothing otherwise, where Herdr's `space.select` shows an error: bind them to your space keys, such as `"alt-1": "herdr-vim.space1"`. In Normal mode, `space.select:<n>` does the same.
 
 While herdr-vim holds the keyboard, Herdr draws no focus ring around the current pane. herdr-vim publishes the mode as the shared value `herdr-vim.mode` (`"insert"`, or the mode's name) so a pane header can mark the current pane instead, for example with an accent border when `shared("herdr-vim.mode") !== "insert"` and the pane is `focused`.
 

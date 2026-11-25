@@ -5,11 +5,13 @@
 // mode) that takes the keyboard in Normal mode, so keys drive Herdr instead,
 // until `i` returns to Insert mode or a click gives a terminal the keyboard.
 //
-// It takes two commands from Herdr's keys.json:
+// It takes these commands from Herdr's keys.json:
 //   herdr-vim.escape   bound to Escape in the terminal section: the Escape
 //                      goes to the program, a second one within 300 ms in
 //                      the same terminal enters Normal mode instead
 //   herdr-vim.normal   enters Normal mode
+//   herdr-vim.space<n> space.select:<n> when there is an nth
+//                      space, else nothing, where space.select alerts
 //
 // The keys of every mode are in a keys.json written exactly like Herdr's:
 // sections of key → action, with modes for sections. The user's
@@ -36,7 +38,7 @@
 
 import { View, div } from "gpui-kit";
 import { Popup, h_flex, v_flex } from "gpui-base";
-import { appHome, commands, exec, focused, hc, home, nextCommand, notify, panes, readTextFile, run, setShared, theme } from "herdr";
+import { appHome, commands, exec, focused, hc, home, nextCommand, notify, panes, readTextFile, run, setShared, spaces, theme } from "herdr";
 
 const START = "normal";
 const INSERT = "insert";
@@ -156,10 +158,17 @@ function split(action) {
   return at < 0 ? [action, null] : [action.slice(0, at), action.slice(at + 1)];
 }
 
+// space.select:<n>, when there is an nth space: space.select alerts when
+// there isn't.
+function selectSpace(index) {
+  if (index >= 1 && index <= spaces().length) run("space.select", { index });
+}
+
 // Runs an action as Herdr's keys.json would.
 function runAction(action) {
   if (action && typeof action === "object") return run(action.command, action.args ?? {});
   const [command, value] = split(action);
+  if (command === "space.select" && /^[0-9]+$/.test(value ?? "")) return selectSpace(Number(value));
   if (value === null) return run(command, {});
   const first = commands().find((c) => c.name === command)?.args?.[0]?.name;
   return run(command, first ? { [first]: value } : {});
@@ -259,6 +268,10 @@ export default class Vim extends View {
   command(c, cx) {
     if (c === "escape") this.escape(cx);
     else if (c === "normal") this.normal(cx);
+    else if (/^space[0-9]+$/.test(c)) {
+      if (this.mode !== INSERT) this.refocus(cx);
+      selectSpace(Number(c.slice(5)));
+    }
   }
 
   // Escape in a terminal: to the program, or with the previous one, Normal.
