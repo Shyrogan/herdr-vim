@@ -47,6 +47,13 @@ const SETTLE_MS = 250;
 // pane.go gives no answer, and focused() names the new pane a few ms later:
 // focus that hasn't moved within this long means there was no pane that way.
 const GO_MS = 100;
+// The key context of herdr-vim's block, and the keys bound in it (normal()):
+// each one's action, and the key event it stands for.
+const CONTEXT = "HerdrVim";
+const TAB_KEYS = {
+  tab: { action: "herdrvim_tab", event: { keystroke: "tab", key: "tab", modifiers: {} } },
+  "shift-tab": { action: "herdrvim_shift_tab", event: { keystroke: "shift-tab", key: "tab", modifiers: { shift: true } } },
+};
 
 const userKeys = () => `${home()}/.config/herdr-vim/keys.json`;
 const defaultKeys = () => `${appHome()}/mods/herdr-vim/default-keys.json`;
@@ -268,6 +275,13 @@ export default class Vim extends View {
     this.mode = START;
     this.once = null;
     this.help = false;
+    // Tab and Shift+Tab are the window's key bindings (focus the next tab
+    // stop), which run before a key handler sees the key, so they would take
+    // the keyboard away. Bindings in herdr-vim's own context win over them
+    // and come back as actions (render). Herdr drops a mod's bindings each
+    // time it rebuilds its keymap, so they go in again each time; the same
+    // binding twice changes nothing.
+    cx.bind_keys(Object.keys(TAB_KEYS).map((keystroke) => ({ keystroke, action: TAB_KEYS[keystroke].action, context: CONTEXT })));
     this.handle.focus();
     this.watch?.cancel();
     // No focus-out event reaches a mod: look whether the keyboard is still
@@ -492,11 +506,14 @@ export default class Vim extends View {
     // herdr-vim.help.
     const listing = normal && (this.once || this.help);
     return h_flex().size_full().pl(14).items_center().bg(t.chrome).border_t(1).border_color(t.border).text_size(11.8)
+      .key_context(CONTEXT)
       .track_focus(this.handle)
       .on_key_down((e, cx) => {
         cx.stop_propagation();
         this.press(e, cx);
       })
+      .on_action(TAB_KEYS.tab.action, (_e, cx) => this.press(TAB_KEYS.tab.event, cx))
+      .on_action(TAB_KEYS["shift-tab"].action, (_e, cx) => this.press(TAB_KEYS["shift-tab"].event, cx))
       .child(Popup.new("herdr-vim-keys", label).anchor("bottom_left")
         .when(Boolean(listing), (el) => el.content(div().pb(8).child(this.keysList(t)))));
   }
